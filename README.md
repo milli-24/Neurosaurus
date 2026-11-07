@@ -1,22 +1,22 @@
 # Neurosaurus
 
-**How much work are the cells actually doing?** We gave a dinosaur a simulated neural
-network as its short-term memory, then tested whether the network was really helping.
+**How much work are the cells actually doing?** We gave the famous dinosaur a simulated neural
+network as its short-term memory, then tested whether the network was really doing anything to help.
 
-In this simulator, it wasn't. The neurons respond to stimulation, but reading their spikes did
+We learned that in this simulator, it wasn't. The neurons did respond to stimulation, but reading their spikes did
 worse than reading the input directly. Once we removed the stimulated electrodes from the decoder,
-the score fell to the level of shuffled data, so we found no sign that the network did useful work.
+the score fell to the level of shuffled data, so we found no sign that the network did any useful work.
 
-All results come from a simulator (the `cl` SDK with a leaky integrate-and-fire backend).
-No living cells were used, and these results are not evidence about CL1 tissue.
+All our results come from a simulator (the `cl` SDK with a leaky integrate-and-fire backend).
+Please note that in this experiment, no living cells were used for compute, and these results are not evidence about CL1 tissue.
 
-## The task
+## What we wanted to do
 A cactus approaches at a random speed, and the dino must time one jump. Faster cacti need
-an earlier jump relative to their distance, so a good decision needs speed as well as position.
+an earlier jump relative to their distance, so a good decision should combine both speed and position.
 
-1. Cactus distance is encoded as stimulation on one of 16 groups of 3 electrodes.
-2. The network responds. Its weights stay fixed, so this is reservoir computing.
-3. A logistic regression reads one tick of spike counts and decides when to jump.
+1. Distance to a cactus is encoded as stimulation on one of 16 groups of 3 electrodes.
+2. The network responds. Its weights stay fixed, and this makes it reservoir computing.
+3. A logistic regression reads one tick of spike counts and then decides when to jump.
 
 One position can't reveal speed, so a one-tick readout can only use speed if the network
 holds on to earlier inputs.
@@ -79,11 +79,11 @@ is short compared with the input history needed to infer speed. We did not test 
 
 ## Next step
 Run the same test on a CL1, with stimulated electrodes removed and the shuffled control included.
-Real cultures may spread and hold information for longer. The first bar to clear is shuffled data,
+Our assumption is that real cultures may spread and hold information for longer. The first bar to clear is shuffled data,
 and the score to beat is reading the current input. This code has not yet been run on hardware,
-and stimulation rate and per-culture calibration would need adjusting.
+and stimulation rate and per-culture calibration might need adjusting.
 
-## Run it
+## To Run it
 Needs Python 3.13. From the repo root:
 
 ```bash
