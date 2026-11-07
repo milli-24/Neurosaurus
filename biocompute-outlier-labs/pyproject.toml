@@ -1,0 +1,17 @@
+[project]
+name = "biocompute-outlier-labs"
+version = "0.1.0"
+description = "Biocompute experiments against the Cortical Labs cl SDK"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "cl-sdk==1.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/organoid_simulator"]

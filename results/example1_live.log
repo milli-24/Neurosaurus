@@ -1,0 +1,48 @@
+Data visualiser: http://127.0.0.1:8000/visualiser
+Stimulating channel 27 on alternate ticks for 30 s ...
+Warning: Jitter detection is currently not supported in cl-sdk. This may lead to unexpected loop timing behaviour if your loop body takes a long time to execute.
+  t=  1s  ch27 spikes: stim=10  no_stim=4
+  t=  2s  ch27 spikes: stim=23  no_stim=7
+  t=  3s  ch27 spikes: stim=34  no_stim=9
+  t=  4s  ch27 spikes: stim=44  no_stim=9
+  t=  5s  ch27 spikes: stim=54  no_stim=10
+  t=  6s  ch27 spikes: stim=65  no_stim=13
+  t=  7s  ch27 spikes: stim=76  no_stim=13
+  t=  8s  ch27 spikes: stim=86  no_stim=15
+  t=  9s  ch27 spikes: stim=97  no_stim=18
+  t= 10s  ch27 spikes: stim=108  no_stim=22
+  t= 11s  ch27 spikes: stim=122  no_stim=24
+  t= 12s  ch27 spikes: stim=133  no_stim=27
+  t= 13s  ch27 spikes: stim=146  no_stim=30
+  t= 14s  ch27 spikes: stim=157  no_stim=34
+  t= 15s  ch27 spikes: stim=171  no_stim=39
+  t= 16s  ch27 spikes: stim=183  no_stim=42
+  t= 17s  ch27 spikes: stim=194  no_stim=44
+  t= 18s  ch27 spikes: stim=208  no_stim=48
+  t= 19s  ch27 spikes: stim=218  no_stim=48
+  t= 20s  ch27 spikes: stim=229  no_stim=51
+  t= 21s  ch27 spikes: stim=241  no_stim=54
+  t= 22s  ch27 spikes: stim=252  no_stim=57
+  t= 23s  ch27 spikes: stim=265  no_stim=60
+  t= 24s  ch27 spikes: stim=278  no_stim=62
+  t= 25s  ch27 spikes: stim=291  no_stim=65
+  t= 26s  ch27 spikes: stim=302  no_stim=69
+  t= 27s  ch27 spikes: stim=314  no_stim=73
+  t= 28s  ch27 spikes: stim=325  no_stim=76
+  t= 29s  ch27 spikes: stim=336  no_stim=77
+
+Results
+     stim:   348 spikes on ch27 over 300 ticks (1.16 per tick)
+  no_stim:    78 spikes on ch27 over 300 ticks (0.26 per tick)
+  Most active channels: ch27=426, ch35=185, ch18=180, ch28=175, ch14=174, ch13=173, ch6=170, ch5=168
+
+Viewer still running at http://127.0.0.1:8000/visualiser
+Press Enter to close it and exit ...Traceback (most recent call last):
+  File "/Users/millionkibromokbay/Desktop/neurosaurus/biocompute-outlier-labs/experiments/example1.py", line 93, in <module>
+    main()
+    ~~~~^^
+  File "/Users/millionkibromokbay/Desktop/neurosaurus/biocompute-outlier-labs/experiments/example1.py", line 89, in main
+    input("Press Enter to close it and exit ...")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+EOFError: EOF when reading a line
+LIF data source is using seed: 42  [1:1 (64 neurons)]

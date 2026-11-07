@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neurosaurus</title>
+<style>
+  :root { --page: #08040F; --muted: #7D6FA8; --bezel: #1B1033; --mint: #7CF5C6; }
+  body { margin: 0; padding: 16px; background: var(--page); color: var(--muted);
+         font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  main { max-width: 960px; margin: 0 auto; }
+  .cabinet { position: relative; border: 10px solid var(--bezel); border-radius: 22px; overflow: hidden;
+             box-shadow: 0 0 24px rgba(124, 245, 198, .28); line-height: 0; }
+  canvas#game { width: 100%; image-rendering: pixelated; filter: saturate(1.15) contrast(1.05); }
+  .crt { position: absolute; inset: 0; pointer-events: none;
+         background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .28) 2px 3px),
+                     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%); }
+  @media (prefers-reduced-motion: no-preference) { .crt { animation: flicker 4s steps(1) infinite; } }
+  @keyframes flicker { 0%, 98% { opacity: 1; } 99% { opacity: .92; } }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  select, button { font: inherit; padding: 6px 8px; background: var(--bezel); color: #F3ECFF; border: 1px solid #3D2A63; }
+  .bottom { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; align-items: flex-start; }
+  #mea { width: 96px; height: 96px; flex: none; image-rendering: pixelated; }
+  #note { flex: 1; min-width: 220px; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="cabinet">
+    <canvas id="game" width="320" height="180"></canvas>
+    <div class="crt"></div>
+  </div>
+  <div class="controls">
+    <select id="mode" aria-label="Pilot">
+      <option value="replay">Replay recorded simulator trials</option>
+      <option value="keyboard">Keyboard</option>
+    </select>
+    <select id="decoder" aria-label="Replay decoder">
+      <option value="network">Decoder: simulated neuron spikes</option>
+      <option value="input_now">Decoder: current input only</option>
+      <option value="history">Decoder: input history (silicon)</option>
+    </select>
+    <button id="restart">Restart</button>
+    <span>Space: start / jump. M: mute.</span>
+  </div>
+  <div class="bottom">
+    <canvas id="mea" width="8" height="8" aria-label="8 by 8 electrode activity"></canvas>
+    <p id="note"></p>
+  </div>
+</main>
+<script src="retro-sim.js"></script>
+<script>
+const cv = document.getElementById('game'), g = cv.getContext('2d');
+const meaCtx = document.getElementById('mea').getContext('2d');
+const modeSel = document.getElementById('mode'), decoderSel = document.getElementById('decoder');
+const note = document.getElementById('note');
+const W = 320, H = 180, GROUND = 152, SCALE = 0.6, DINO_SX = 40, WORLD_SX = 43;
+
+const C = { ink: '#140C28', mint: '#7CF5C6', pink: '#FF4F9A', gold: '#FFD65A', lav: '#8E80B8', light: '#F3ECFF',
+            sky: ['#1B1033', '#3D2A63', '#7A4A8C'], sand: '#E8C170', shade: '#B88A4A', mesa: '#2A1A4A' };
+const SPRITE = { g: C.mint, d: '#2E9E80', b: '#E6FAFF', k: C.ink, w: '#FFFFFF', h: '#AAE6FF', p: C.pink, q: '#C8286E',
+                 y: C.gold, l: '#DCC8FF', c: '#A878FF', v: '#5B3A9E', x: C.pink };
+
+const DINO = `................y.......
+................k.......
+............hhhhhhhh....
+..........hh........hh..
+.........h...ppppp....h.
+........h...ppqpppp...h.
+........h..ggppppqgg...h
+.......h..gggggggggggg.h
+.......h..ggggggwwkgggggh
+.......h..ggggggwkkgggggh
+.......h..gggggggggggggh.
+........h..ggggkkkkkkkh..
+........hh.gggggggggghh..
+..........hhhhgggghhh....
+.dd.........ggggggg......
+..ddd.....gggbbbbggg.....
+....dddggggggbbbbbgdg....
+......ggggggggbbbbg..d...
+.........gggggbbbgg......
+..........ggggggggg......`.split('\n');
+const LEGS = {
+  run1: ['...........gg....dd......', '...........gg.....dd.....', '..........kkk.....kkk....'],
+  run2: ['............dd..gg.......', '...........dd...gg.......', '..........kkk...kkk......'],
+  jump: ['..........ggg..ddd.......', '...........kk...kk.......', '.........................'],
+};
+const EXTINCT = ['.......h..ggggggkgkgggggh', '.......h..gggggggkggggggh'];
+const CACTUS = `.......x......
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+..x...lcv.....
+.lcv..lcv.....
+.lcv..lcv...x.
+.lcv..lcv..lcv
+.lcv..lcv..lcv
+.lcv..lcv..lcv
+.lcvvvlcv..lcv
+..vvvvlcv..lcv
+......lcvvvlcv
+......lcvvvvv.
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+......lcv.....
+.....vlcvv....`.split('\n');
+
+const FONT = {
+  A:'0E11111F111111',B:'1E11111E11111E',C:'0E11101010110E',D:'1E11111111111E',E:'1F10101E10101F',F:'1F10101E101010',
+  G:'0E11101711110F',H:'1111111F111111',I:'0E04040404040E',J:'0702020202120C',K:'11121418141211',L:'1010101010101F',
+  M:'111B1515111111',N:'11111915131111',O:'0E11111111110E',P:'1E11111E101010',Q:'0E11111115120D',R:'1E11111E141211',
+  S:'0F10100E01011E',T:'1F040404040404',U:'1111111111110E',V:'11111111110A04',W:'1111111515 1B11'.replace(' ',''),
+  X:'11110A040A1111',Y:'11110A04040404',Z:'1F01020408101F','0':'0E11131519110E','1':'040C040404040E',
+  '2':'0E11010204081F','3':'1F02040201110E','4':'02060A121F0202','5':'1F101E0101110E','6':'0608101E11110E',
+  '7':'1F010204080808','8':'0E11110E11110E','9':'0E11110F01020C','.':'00000000000C0C','!':'04040404040004',
+  '?':'0E110102040004','-':'0000001F000000',':':'000C0C000C0C00',',':'00000000 0C0408'.replace(' ',''),
+  "'":'0C040800000000','/':'01010204081010','+':'0004041F040400','%':'18190204081303','(':'02040808080402',
+  ')':'08040202020408',
+};
+
+function text(str, x, y, color, scale = 1, shadow = C.ink) {
+  const draw = (ox, oy, col) => {
+    g.fillStyle = col;
+    let cx = ox;
+    for (const ch of str) {
+      const hex = FONT[ch];
+      if (hex) for (let r = 0; r < 7; r++) {
+        const bits = parseInt(hex.substr(r * 2, 2), 16);
+        for (let b = 0; b < 5; b++) if (bits & (16 >> b)) g.fillRect(cx + b * scale, oy + r * scale, scale, scale);
+      }
+      cx += 6 * scale;
+    }
+  };
+  x = Math.round(x); y = Math.round(y);
+  if (shadow) draw(x + scale, y + scale, shadow);
+  draw(x, y, color);
+}
+const textW = (s, scale = 1) => s.length * 6 * scale;
+const centred = (s, y, col, scale = 1, shadow) => text(s, (W - textW(s, scale)) / 2, y, col, scale, shadow);
+const pad = n => String(Math.min(n, 99999)).padStart(5, '0');
+
+function sprite(rows, x, y) {
+  x = Math.round(x); y = Math.round(y);
+  rows.forEach((row, r) => {
+    for (let i = 0; i < row.length; i++) {
+      const col = SPRITE[row[i]];
+      if (col) { g.fillStyle = col; g.fillRect(x + i, y + r, 1, 1); }
+    }
+  });
+}
+
+// Static backdrop: dithered sky, stars and ringed planet.
+const backdrop = document.createElement('canvas');
+backdrop.width = W; backdrop.height = H;
+const stars = [];
+(function paintBackdrop() {
+  const b = backdrop.getContext('2d');
+  const px = (x, y, col) => { b.fillStyle = col; b.fillRect(x, y, 1, 1); };
+  const bands = [[0, 60, 0], [60, 110, 1], [110, GROUND, 2]];
+  for (const [y0, y1, i] of bands) {
+    b.fillStyle = C.sky[i]; b.fillRect(0, y0, W, y1 - y0);
+    if (i < 2) for (let y = y1 - 6; y < y1; y++) for (let x = 0; x < W; x++)
+      if ((x + y) % 2 === 0) px(x, y, C.sky[i + 1]);
+  }
+  for (let i = 0; i < 70; i++) stars.push({ x: Math.random() * W | 0, y: 26 + Math.random() * 70 | 0,
+                                            big: Math.random() < .15, ph: Math.random() * 60 | 0 });
+  const cx = 262, cy = 48, r = 17;
+  const ring = front => {
+    for (let a = 0; a < Math.PI * 2; a += .006) {
+      const ex = Math.cos(a) * 30, ey = Math.sin(a) * 8;
+      const x = Math.round(cx + ex * .97 - ey * .24), y = Math.round(cy + ex * .24 + ey * .97);
+      if ((ey > 0) === front) px(x, y, Math.round(a * 60) % 3 === 0 ? '#FF9F4A' : C.gold);
+    }
+  };
+  ring(false);
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    if (x * x + y * y > r * r) continue;
+    const shade = (x + y) / (r * 1.4);
+    const col = shade > .55 ? '#6B3FA0' : shade > .2 ? ((x + y) % 2 ? '#8A52C8' : '#6B3FA0')
+              : shade > -.2 ? '#8A52C8' : shade > -.5 ? ((x + y) % 2 ? '#B06BF0' : '#8A52C8') : '#B06BF0';
+    px(cx + x, cy + y, col);
+  }
+  ring(true);
+})();
+const mesaHeights = Array.from({ length: 28 }, (_, i) => 10 + ((i * 37) % 7 < 3 ? 22 : 8) + (i * 13) % 9);
+
+let audio = null, muted = false;
+function tone(freq, start, dur, type = 'square', vol = .05) {
+  if (!audio || muted) return;
+  const o = audio.createOscillator(), a = audio.createGain();
+  o.type = type; o.frequency.value = freq;
+  a.gain.setValueAtTime(vol, audio.currentTime + start);
+  a.gain.exponentialRampToValueAtTime(.001, audio.currentTime + start + dur);
+  o.connect(a); a.connect(audio.destination);
+  o.start(audio.currentTime + start); o.stop(audio.currentTime + start + dur);
+}
+const sfx = {
+  jump() { tone(520, 0, .07); tone(780, .07, .09); },
+  start() { [392, 523, 659].forEach((f, i) => tone(f, i * .09, .1)); },
+  extinct() { [392, 330, 262, 196].forEach((f, i) => tone(f, i * .1, .12, 'sawtooth')); },
+};
+
+const PUNS = ['EXTINCT. AGAIN.', 'THAT CACTUS HAD A SHARP MIND', 'NATURAL SELECTION 1, YOU 0', 'ACTION POTENTIAL: UNREALISED',
+              'FOSSIL-IZED', 'JURASSIC LARK', 'NEURONS NEED A NAP', 'A ROAR-SOME EFFORT', 'TOO MUCH CACTI-VATION'];
+const PILOTS = { network: ['SIM NEURONS (REPLAY)', C.pink], input_now: ['CURRENT INPUT (REPLAY)', C.gold],
+                 history: ['INPUT HISTORY (REPLAY)', C.gold] };
+
+let trials = null, sim = null, screen = 'title', frameNo = 0, scroll = 0, pun = '', hitTimer = 0, overTimer = 0;
+let particles = [], record = 0, newRecord = false;
+try { record = +localStorage.getItem('neurosaurus-record') || 0; } catch {}
+
+function burst(x, y, colors, n) {
+  for (let i = 0; i < n; i++) particles.push({ x, y, vx: (Math.random() - .5) * 90, vy: -Math.random() * 90,
+                                               life: .5 + Math.random() * .4, col: colors[i % colors.length] });
+}
+const dinoScreenY = () => GROUND - 23 - sim.y * SCALE;
+
+function begin() {
+  const replaying = modeSel.value === 'replay';
+  if (replaying && !trials) return;
+  sim = createSim(replaying ? trials : null, {
+    onJump() {
+      sfx.jump();
+      burst(DINO_SX + 17, dinoScreenY(), replaying && decoderSel.value === 'network' ? [C.pink] : [C.gold, C.pink], 8);
+    },
+    onHit() {
+      hitTimer = .6; pun = PUNS[Math.random() * PUNS.length | 0];
+      sfx.extinct();
+      burst(DINO_SX + 12, dinoScreenY() + 10, [C.mint, '#AAE6FF', C.pink], 18);
+      if (!replaying) {
+        screen = 'over'; overTimer = 0; newRecord = sim.cleared > record;
+        if (newRecord) { record = sim.cleared; try { localStorage.setItem('neurosaurus-record', record); } catch {} }
+      }
+    },
+  });
+  sim.decoder = decoderSel.value;
+  screen = 'play'; hitTimer = 0; particles = [];
+  sfx.start();
+}
+
+function drawWorld(dt) {
+  g.drawImage(backdrop, 0, 0);
+  for (const s of stars) {
+    g.fillStyle = (frameNo + s.ph) % 60 < 30 ? '#FFFFFF' : '#9A8CCF';
+    g.fillRect(s.x, s.y, s.big ? 2 : 1, s.big ? 2 : 1);
+  }
+  g.fillStyle = C.mesa;
+  mesaHeights.forEach((h, i) => {
+    const x = ((i * 16 - scroll * .25) % (28 * 16) + 28 * 16) % (28 * 16) - 16;
+    g.fillRect(Math.round(x), GROUND - h, 16, h);
+  });
+  g.fillStyle = C.sand; g.fillRect(0, GROUND, W, H - GROUND);
+  g.fillStyle = C.shade; g.fillRect(0, GROUND, W, 1);
+  const off = Math.round(scroll) % 40;
+  g.fillStyle = C.mint;
+  for (let x = -off - 40; x < W + 40; x += 40) {
+    g.fillRect(x, 157, 18, 1); g.fillRect(x + 18, 157, 1, 5); g.fillRect(x + 18, 162, 14, 1); g.fillRect(x + 32, 161, 3, 3);
+  }
+  g.fillStyle = '#FFFFFF';
+  const pulse = (frameNo * 1.5) % W;
+  g.fillRect(Math.round(pulse), 157, 2, 1);
+}
+
+function drawDino() {
+  const dead = hitTimer > 0 || screen === 'over';
+  const rows = DINO.slice();
+  if (dead) { rows[8] = EXTINCT[0]; rows[9] = EXTINCT[1]; }
+  const legs = sim && sim.y > 0 ? LEGS.jump : LEGS[frameNo % 16 < 8 ? 'run1' : 'run2'];
+  const y = sim ? dinoScreenY() : GROUND - 23;
+  sprite(rows.concat(legs), DINO_SX, y);
+  if (frameNo % 32 < 16) {
+    g.fillStyle = sim && modeSel.value === 'replay' && decoderSel.value === 'network' ? C.pink : C.gold;
+    g.fillRect(DINO_SX + 16, Math.round(y), 1, 1);
+  }
+}
+
+function drawHud() {
+  const replaying = modeSel.value === 'replay';
+  const total = sim ? sim.cleared + sim.hit : 0;
+  text(replaying ? 'SYNAPSES FIRED ' + pad(sim ? sim.fired : 0) : 'CACTI CLEARED ' + pad(sim ? sim.cleared : 0), 4, 4, C.light);
+  text('LVL 1  JURASSIC SPARK', 4, 13, C.mint);
+  const right = replaying ? `TRIAL ${pad(sim ? sim.trial + 1 : 0)}` : `FOSSIL RECORD ${pad(record)}`;
+  text(right, W - textW(right) - 4, 4, C.lav);
+  const rate = `CLEARED ${total ? Math.round(100 * sim.cleared / total) : 0}% (${sim ? sim.cleared : 0}/${total})`;
+  text(rate, W - textW(rate) - 4, 13, C.light);
+
+  g.fillStyle = 'rgba(8,4,15,.72)'; g.fillRect(0, H - 12, W, 12);
+  const [label, col] = replaying ? PILOTS[decoderSel.value] : ['KEYBOARD', C.gold];
+  text('PILOT', 4, H - 10, C.lav);
+  text(label, 40, H - 10, col);
+  text('SPIKES', W - 106, H - 10, C.lav);
+  const counts = sim && replaying ? sim.spikes : new Array(64).fill(0);
+  for (let i = 0; i < 16; i++) {
+    let v = 0;
+    for (let j = 0; j < 4; j++) v += counts[i * 4 + j];
+    const level = Math.min(1, v / 3), h = Math.round(level * 8);
+    g.fillStyle = level > .6 ? C.pink : C.mint;
+    g.fillRect(W - 66 + i * 4, H - 2 - h, 3, h);
+  }
+}
+
+function drawMea() {
+  const counts = sim && modeSel.value === 'replay' ? sim.spikes : new Array(64).fill(0);
+  for (let i = 0; i < 64; i++) {
+    meaCtx.fillStyle = counts[i] > 1 ? C.pink : counts[i] > 0 ? C.mint : '#1B1033';
+    meaCtx.fillRect(i >> 3, i % 8, 1, 1);
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000);
+  last = now; frameNo++;
+  if (screen === 'play') {
+    const speed = sim.cactus.speed;
+    sim.step(dt);
+    scroll += speed * SCALE * dt;
+    if (hitTimer > 0) hitTimer -= dt;
+  } else if (screen === 'title') scroll += 30 * dt;
+  else overTimer += dt;
+
+  drawWorld(dt);
+  if (sim) sprite(CACTUS, WORLD_SX + sim.cactus.x * SCALE, GROUND - 25);
+  if (sim && frameNo % 16 < 2) {
+    g.fillStyle = '#FFFFFF';
+    g.fillRect(Math.round(WORLD_SX + sim.cactus.x * SCALE) + 7, GROUND - 25, 1, 1);
+  }
+  drawDino();
+  particles = particles.filter(p => (p.life -= dt) > 0);
+  for (const p of particles) {
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 220 * dt;
+    g.fillStyle = p.col; g.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+  }
+  drawHud();
+  drawMea();
+
+  if (screen === 'title') {
+    g.fillStyle = 'rgba(8,4,15,.55)'; g.fillRect(0, 0, W, H);
+    centred('NEUROSAURUS', 44 + Math.round(Math.sin(frameNo / 20) * 2), C.mint, 3, '#5B1A4A');
+    centred('A JURASSIC SPARK PRODUCTION', 74, C.gold);
+    if (frameNo % 60 < 40) centred(trials || modeSel.value === 'keyboard' ? 'PRESS SPACE TO EVOLVE' : 'LOADING TRIALS...', 92, C.light);
+    centred('SIMULATED NEURONS, NOT LIVING CELLS', 112, C.lav);
+  } else if (screen === 'over') {
+    g.fillStyle = 'rgba(8,4,15,.72)'; g.fillRect(0, 56, W, 62);
+    const scale = textW(pun, 2) > W - 8 ? 1 : 2;
+    centred(pun, 64, C.pink, scale);
+    centred(`CLEARED ${pad(sim.cleared)}`, 84, C.light);
+    if (newRecord) centred('NEW FOSSIL RECORD!', 94, C.gold);
+    if (overTimer > .6 && frameNo % 60 < 40) centred('PRESS SPACE TO RE-EVOLVE', 105, C.gold);
+  } else if (hitTimer > 0 && modeSel.value === 'replay') {
+    centred(pun, 40, C.pink);
+  }
+  requestAnimationFrame(frame);
+}
+
+function setNote() {
+  note.textContent = modeSel.value === 'keyboard'
+    ? 'You are the pilot. No neurons involved.'
+    : 'Replay of held-out trials recorded earlier from the LIF simulator. These are simulated neurons, not living cells, and they are not controlling the game live. The grid shows recorded spikes, which are the same for all three decoders.';
+  decoderSel.disabled = modeSel.value === 'keyboard';
+}
+
+addEventListener('keydown', e => {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+  if (e.code === 'KeyM') muted = !muted;
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  if (screen === 'title' || (screen === 'over' && overTimer > .6)) begin();
+  else if (screen === 'play' && modeSel.value === 'keyboard') sim.jump();
+});
+document.getElementById('restart').onclick = begin;
+modeSel.onchange = () => { setNote(); screen = 'title'; sim = null; modeSel.blur(); };
+decoderSel.onchange = () => { if (sim) begin(); decoderSel.blur(); };
+
+const params = new URLSearchParams(location.search);
+if (params.get('decoder')) decoderSel.value = params.get('decoder');
+setNote();
+fetch('trials.json').then(r => r.json()).then(d => {
+  trials = d.trials;
+  if (params.has('autostart')) begin();
+}).catch(() => { note.textContent = 'trials.json did not load. Serve this folder over HTTP.'; });
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

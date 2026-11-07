@@ -1,0 +1,39 @@
+{
+  "tps": 400,
+  "coupling": 4.0,
+  "seed": 42,
+  "results": [
+    {
+      "name": "random jump tick",
+      "clear_rate": 0.21666666666666667,
+      "ci": [
+        0.11666666666666667,
+        0.3333333333333333
+      ]
+    },
+    {
+      "name": "input now only (no memory)",
+      "clear_rate": 0.6,
+      "ci": [
+        0.48333333333333334,
+        0.7166666666666667
+      ]
+    },
+    {
+      "name": "network spikes this tick",
+      "clear_rate": 0.4666666666666667,
+      "ci": [
+        0.35,
+        0.5833333333333334
+      ]
+    },
+    {
+      "name": "input history, 6 ticks (silicon)",
+      "clear_rate": 0.9,
+      "ci": [
+        0.8166666666666667,
+        0.9666666666666667
+      ]
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neurosaurus</title>
+<style>
+  :root { --bg: #f7f7f5; --ink: #2b2b2b; --muted: #77777a; --accent: #c2410c; --cell: #e4e4e0; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
+         font: 15px/1.4 ui-monospace, Menlo, monospace; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: var(--muted); }
+  canvas { display: block; width: 100%; background: #fff; border: 1px solid var(--cell); }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; align-items: flex-start; }
+  #stats { flex: 1; min-width: 220px; white-space: pre-line; }
+  button, select { font: inherit; padding: 6px 10px; margin-right: 6px; }
+  #badge { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Neurosaurus</h1>
+  <p id="badge">Controller: keyboard (space to jump)</p>
+  <canvas id="game" width="860" height="220"></canvas>
+  <div class="row">
+    <canvas id="mea" width="200" height="200" style="width:200px;flex:none"></canvas>
+    <div id="stats"></div>
+  </div>
+  <div class="row">
+    <div>
+      <select id="mode">
+        <option value="keyboard">Keyboard</option>
+        <option value="fake">Fake spikes (placeholder, not results)</option>
+        <option value="replay">Replay recorded trials</option>
+      </select>
+      <select id="decoder">
+        <option value="network">Replay decoder: network spikes</option>
+        <option value="input_now">Replay decoder: current input only</option>
+        <option value="history">Replay decoder: input history (silicon)</option>
+      </select>
+      <button id="restart">Restart</button>
+    </div>
+  </div>
+</main>
+<script>
+const W = 860, H = 220, GROUND = 180, DINO_X = 80, DINO_W = 34, DINO_H = 40;
+const GRAVITY = 2600, JUMP_V = 820, TICK_S = 0.05;
+const JUMP_DISTANCE = 150;
+
+const ctx = document.getElementById('game').getContext('2d');
+const mea = document.getElementById('mea').getContext('2d');
+const stats = document.getElementById('stats');
+const badge = document.getElementById('badge');
+const modeSel = document.getElementById('mode');
+const decoderSel = document.getElementById('decoder');
+
+let state, replay = null, replayIdx = 0;
+const tally = { cleared: 0, hit: 0 };
+
+function newCactus() {
+  if (modeSel.value === 'replay' && replay && replay.trials.length) {
+    const t = replay.trials[replayIdx % replay.trials.length];
+    return { x: DINO_X + DINO_W + t.start_dist, w: 22, h: 44, speed: t.speed, scored: false };
+  }
+  return { x: W + 40, w: 22, h: 44, speed: 120 + Math.random() * 360, scored: false };
+}
+
+function reset() {
+  replayIdx = 0;
+  state = { y: 0, vy: 0, cactus: newCactus(), tickClock: 0, spikes: new Array(64).fill(0), flash: 0, tick: 0 };
+  tally.cleared = 0; tally.hit = 0;
+}
+
+function jump() { if (state.y === 0) state.vy = JUMP_V; }
+
+// Placeholder only: spikes here are invented so the display can be built before
+// the simulator is wired in. Never report anything from this mode.
+function fakeController(c) {
+  const dist = c.x - (DINO_X + DINO_W);
+  for (let i = 0; i < 64; i++) state.spikes[i] = Math.random() < 0.08 ? 1 : 0;
+  const ch = Math.min(7, Math.max(0, Math.floor(dist / 100)));
+  for (let r = 0; r < 8; r++) state.spikes[r + 8 * ch] += 2;
+  return dist < JUMP_DISTANCE;
+}
+
+function replayController(c) {
+  if (!replay || !replay.trials.length) return false;
+  const t = replay.trials[replayIdx % replay.trials.length];
+  const s = t.spikes[Math.min(state.tick, t.spikes.length - 1)];
+  if (s) state.spikes = s;
+  return t.jump_tick[decoderSel.value] === state.tick;
+}
+
+function controlTick() {
+  const mode = modeSel.value, c = state.cactus;
+  if (mode === 'fake' && fakeController(c)) jump();
+  if (mode === 'replay' && replayController(c)) jump();
+  state.tick++;
+}
+
+function step(dt) {
+  const c = state.cactus;
+  state.tickClock += dt;
+  while (state.tickClock >= TICK_S) { state.tickClock -= TICK_S; controlTick(); }
+  c.x -= c.speed * dt;
+  state.vy -= GRAVITY * dt;
+  state.y = Math.max(0, state.y + state.vy * dt);
+  if (state.y === 0 && state.vy < 0) state.vy = 0;
+  const overlap = c.x < DINO_X + DINO_W && c.x + c.w > DINO_X && state.y < c.h;
+  if (overlap && !c.scored) { c.scored = true; tally.hit++; state.flash = 12; }
+  if (c.x + c.w < DINO_X && !c.scored) { c.scored = true; tally.cleared++; }
+  if (c.x + c.w < -10) { replayIdx++; state.cactus = newCactus(); state.tick = 0; }
+}
+
+function draw() {
+  ctx.fillStyle = state.flash-- > 0 ? '#fde2d8' : '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#2b2b2b';
+  ctx.fillRect(0, GROUND, W, 2);
+  const dy = GROUND - DINO_H - state.y;
+  ctx.fillRect(DINO_X, dy, DINO_W - 8, DINO_H);
+  ctx.fillRect(DINO_X + 12, dy - 12, DINO_W - 6, 16);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(DINO_X + 28, dy - 8, 4, 4);
+  ctx.fillStyle = '#3f7d3a';
+  const c = state.cactus;
+  ctx.fillRect(c.x, GROUND - c.h, c.w, c.h);
+
+  const size = 25;
+  for (let i = 0; i < 64; i++) {
+    const r = i % 8, col = Math.floor(i / 8), v = Math.min(1, state.spikes[i] / 3);
+    mea.fillStyle = v > 0 ? `rgba(194,65,12,${0.25 + 0.75 * v})` : '#e4e4e0';
+    mea.fillRect(col * size, r * size, size - 2, size - 2);
+  }
+
+  const total = tally.cleared + tally.hit;
+  stats.textContent =
+    `Cleared: ${tally.cleared}\nHit: ${tally.hit}\n` +
+    `Clear rate: ${total ? Math.round(100 * tally.cleared / total) : 0}%\n` +
+    `Cactus speed: ${Math.round(c.speed)} px/s`;
+}
+
+let last = performance.now();
+function frame(now) {
+  step(Math.min(0.05, (now - last) / 1000));
+  last = now;
+  draw();
+  requestAnimationFrame(frame);
+}
+
+addEventListener('keydown', e => {
+  if (e.code === 'Space' && modeSel.value === 'keyboard') { e.preventDefault(); jump(); }
+});
+document.getElementById('restart').onclick = reset;
+decoderSel.onchange = () => { reset(); decoderSel.blur(); };
+modeSel.onchange = async () => {
+  const labels = {
+    keyboard: 'Controller: keyboard (space to jump)',
+    fake: 'Controller: FAKE spikes, placeholder only',
+    replay: 'Controller: replay of recorded simulator trials',
+  };
+  badge.textContent = labels[modeSel.value];
+  if (modeSel.value === 'replay' && !replay) {
+    try { replay = await (await fetch('trials.json')).json(); }
+    catch { badge.textContent = 'No trials.json yet: run the experiment first'; }
+  }
+  reset();
+  modeSel.blur();
+};
+
+reset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

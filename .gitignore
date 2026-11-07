@@ -1,0 +1,9 @@
+# Local environment
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Private notes, kept out of the public repo
+conversation.md
+NOTES.md

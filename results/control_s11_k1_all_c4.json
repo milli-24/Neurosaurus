@@ -1,0 +1,80 @@
+{
+  "tps": 400,
+  "coupling": 4.0,
+  "seed": 11,
+  "trials": 600,
+  "bin_channels": 1,
+  "readout": "all",
+  "readout_electrodes": 59,
+  "results": [
+    {
+      "name": "random jump tick",
+      "clear_rate": 0.30833333333333335,
+      "ci": [
+        0.23333333333333334,
+        0.39166666666666666
+      ]
+    },
+    {
+      "name": "shuffled network spikes",
+      "clear_rate": 0.14166666666666666,
+      "ci": [
+        0.08333333333333333,
+        0.20833333333333334
+      ]
+    },
+    {
+      "name": "input now only (no memory)",
+      "clear_rate": 0.7333333333333333,
+      "ci": [
+        0.658125,
+        0.8166666666666667
+      ]
+    },
+    {
+      "name": "network spikes this tick",
+      "clear_rate": 0.3333333333333333,
+      "ci": [
+        0.25,
+        0.4166666666666667
+      ]
+    },
+    {
+      "name": "input history, 6 ticks (silicon)",
+      "clear_rate": 0.9583333333333334,
+      "ci": [
+        0.9166666666666666,
+        0.9916666666666667
+      ]
+    }
+  ],
+  "network_minus": {
+    "input_now": {
+      "mean": -0.4,
+      "ci": [
+        -0.5,
+        -0.30833333333333335
+      ]
+    },
+    "shuffled": {
+      "mean": 0.19166666666666668,
+      "ci": [
+        0.09166666666666666,
+        0.2916666666666667
+      ]
+    },
+    "random": {
+      "mean": 0.025,
+      "ci": [
+        -0.08333333333333333,
+        0.13333333333333333
+      ]
+    }
+  },
+  "speed_r2": {
+    "input now": -0.025865467143374454,
+    "network spikes": -0.04127136221507843,
+    "shuffled spikes": -0.04070159473835133,
+    "input history": 0.8757156572239732
+  }
+}
