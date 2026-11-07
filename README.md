@@ -1,4 +1,4 @@
-# Neurosaurus
+# Neurosaurus @biocomputing hack with Outlier Labs, Callosum, Cortical Labs and Frontier
 
 **How much work are the cells actually doing?** We gave the famous dinosaur a simulated neural
 network as its short-term memory, then tested whether the network was really doing anything to help.
